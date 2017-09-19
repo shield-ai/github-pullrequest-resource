@@ -184,3 +184,13 @@ Requires `ruby` to be installed.
   bundle install
   bundle exec rspec
   ```
+
+### How to build and push
+```sh
+docker build .
+```
+Then get the <image ID>  at the end of the last step
+```sh
+docker tag <image ID> 192.168.8.235:5000/github-pullrequest-resource
+docker push 192.168.8.235:5000/github-pullrequest-resource
+``` 
