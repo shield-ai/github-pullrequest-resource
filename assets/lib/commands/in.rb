@@ -32,6 +32,7 @@ module Commands
           echo "#{pr['base']['ref']}" > base_branch
           echo "#{pr['base']['user']['login']}" > userlogin
           echo "#{pr['head']['sha']}" > head_sha
+          echo "#{issue['labels']}" > labels
         BASH
       end
 
@@ -72,6 +73,10 @@ module Commands
 
     def pr
       @pr ||= Octokit.pull_request(input.source.repo, input.version.pr)
+    end
+
+    def issue
+      @issue ||= Octokit.issue(input.source.repo, input.version.pr)
     end
 
     def uri
