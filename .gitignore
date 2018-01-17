@@ -3,3 +3,5 @@ example/
 .bundle
 bin
 .secrets.yml
+*.swp
+*.swo
