@@ -18,13 +18,17 @@ module Commands
       id         = pr['number']
       branch_ref = "pr-#{pr['head']['ref']}"
 
-      raise 'PR has merge conflicts' if pr['mergeable'] == false && fetch_merge
+      unless input.params.changes_only
+        raise 'PR has merge conflicts' if pr['mergeable'] == false && fetch_merge
+        system("git clone #{depth_flag} #{uri} #{destination} 1>&2")
+        raise 'git clone failed' unless $CHILD_STATUS.exitstatus.zero?
+      end
 
-      system("git clone #{depth_flag} #{uri} #{destination} 1>&2")
-
-      raise 'git clone failed' unless $CHILD_STATUS.exitstatus.zero?
-
+      Dir.mkdir(File.join(destination, '.git')) if input.params.changes_only
       Dir.chdir(File.join(destination, '.git')) do
+        pr_files.each do |file|
+          system("echo \"#{file['filename']}\" >> changed_files")
+        end
         system <<-BASH
           echo "#{pr['html_url']}" > url
           echo "#{pr['number']}" > id
@@ -37,29 +41,31 @@ module Commands
       end
 
       Dir.chdir(destination) do
-        raise 'git clone failed' unless system("git fetch -q origin pull/#{id}/#{remote_ref}:#{branch_ref} 1>&2")
+        unless input.params.changes_only
+          raise 'git clone failed' unless system("git fetch -q origin pull/#{id}/#{remote_ref}:#{branch_ref} 1>&2")
 
-        system <<-BASH
-          git checkout #{branch_ref} 1>&2
-          git config --add pullrequest.url #{pr['html_url']} 1>&2
-          git config --add pullrequest.id #{pr['number']} 1>&2
-          git config --add pullrequest.branch #{pr['head']['ref']} 1>&2
-          git config --add pullrequest.basebranch #{pr['base']['ref']} 1>&2
-          git config --add pullrequest.userlogin #{pr['base']['user']['login']} 1>&2
-        BASH
+          system <<-BASH
+            git checkout #{branch_ref} 1>&2
+            git config --add pullrequest.url #{pr['html_url']} 1>&2
+            git config --add pullrequest.id #{pr['number']} 1>&2
+            git config --add pullrequest.branch #{pr['head']['ref']} 1>&2
+            git config --add pullrequest.basebranch #{pr['base']['ref']} 1>&2
+            git config --add pullrequest.userlogin #{pr['base']['user']['login']} 1>&2
+          BASH
 
-        case input.params.git.submodules
-        when 'all', nil
-          system("git submodule update --init --recursive #{depth_flag} 1>&2")
-        when Array
-          input.params.git.submodules.each do |path|
-            system("git submodule update --init --recursive #{depth_flag} #{path} 1>&2")
+          case input.params.git.submodules
+          when 'all', nil
+            system("git submodule update --init --recursive #{depth_flag} 1>&2")
+          when Array
+            input.params.git.submodules.each do |path|
+              system("git submodule update --init --recursive #{depth_flag} #{path} 1>&2")
+            end
           end
-        end
 
-        unless input.params.git.disable_lfs
-          system('git lfs fetch 1>&2')
-          system('git lfs checkout 1>&2')
+          unless input.params.git.disable_lfs
+            system('git lfs fetch 1>&2')
+            system('git lfs checkout 1>&2')
+          end
         end
       end
 
@@ -73,6 +79,10 @@ module Commands
 
     def pr
       @pr ||= Octokit.pull_request(input.source.repo, input.version.pr)
+    end
+
+    def pr_files
+      @pr_files ||= Octokit.pull_request_files(input.source.repo, input.version.pr)
     end
 
     def issue
